@@ -1,4 +1,5 @@
 import 'package:field_ops/features/auth/screens/login_screen.dart';
+import 'package:field_ops/features/auth/screens/register_screen.dart';
 import 'package:field_ops/features/dashboard/screens/home_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -16,34 +17,60 @@ Future<void> main() async {
     anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
   );
 
-
   runApp(const ProviderScope(child: MyApp()));
 }
 
 // Access Supabase client anywhere in your app
 final supabase = Supabase.instance.client;
 
-// GoRouter configuration
-final _router = GoRouter(
-  initialLocation: '/login',
-  routes: [
-    GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
-    GoRoute(path: '/app', builder: (context, state) => const HomeScreen()),
-  ],
-);
+// GoRouter configuration with auth redirect
+final _routerProvider = Provider<GoRouter>((ref) {
+  return GoRouter(
+    initialLocation: '/login',
+    redirect: (context, state) {
+      final isLoggedIn = supabase.auth.currentUser != null;
+      final isAuthRoute =
+          state.matchedLocation == '/login' ||
+          state.matchedLocation == '/register';
 
-class MyApp extends StatelessWidget {
+      // If user is logged in and trying to access auth routes, redirect to /app
+      if (isLoggedIn && isAuthRoute) {
+        return '/app';
+      }
+
+      // If user is not logged in and trying to access /app, redirect to /login
+      if (!isLoggedIn && state.matchedLocation == '/app') {
+        return '/login';
+      }
+
+      // No redirect needed
+      return null;
+    },
+    routes: [
+      GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
+      GoRoute(
+        path: '/register',
+        builder: (context, state) => const RegisterScreen(),
+      ),
+      GoRoute(path: '/app', builder: (context, state) => const HomeScreen()),
+    ],
+  );
+});
+
+class MyApp extends ConsumerWidget {
   const MyApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final router = ref.watch(_routerProvider);
+
     return MaterialApp.router(
       title: 'Field Ops',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
-      routerConfig: _router,
+      routerConfig: router,
     );
   }
 }
